@@ -1,0 +1,342 @@
+# Kubernetes Resources: Pods, ReplicaSets, and Deployments
+# This file contains example YAML definitions for all three resource types
+
+---
+# ============================================================================
+# 1. POD DEFINITION
+# ============================================================================
+# A Pod is the smallest deployable unit in Kubernetes
+# It wraps one or more containers (usually one)
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nginx-pod
+  namespace: default
+  labels:
+    app: nginx
+    env: development
+    tier: frontend
+  annotations:
+    description: "Single nginx container pod for testing"
+spec:
+  containers:
+    - name: nginx-container
+      image: nginx:1.27-alpine
+      imagePullPolicy: IfNotPresent
+      ports:
+        - name: http
+          containerPort: 80
+          protocol: TCP
+      resources:
+        requests:
+          memory: "64Mi"
+          cpu: "50m"
+        limits:
+          memory: "128Mi"
+          cpu: "100m"
+      livenessProbe:
+        httpGet:
+          path: /
+          port: http
+        initialDelaySeconds: 10
+        periodSeconds: 10
+      readinessProbe:
+        httpGet:
+          path: /
+          port: http
+        initialDelaySeconds: 5
+        periodSeconds: 5
+
+---
+# ============================================================================
+# 2. REPLICASET DEFINITION
+# ============================================================================
+# A ReplicaSet ensures a specified number of Pod replicas are running
+# It automatically replaces failed Pods but doesn't support rolling updates
+
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: nginx-replicaset
+  namespace: default
+  labels:
+    app: nginx
+    tier: frontend
+  annotations:
+    description: "ReplicaSet managing 3 nginx pods with self-healing"
+spec:
+  replicas: 3                          # Desired number of Pod replicas
+  selector:
+    matchLabels:
+      app: nginx-rs                    # Label selector to identify Pods
+  template:
+    metadata:
+      labels:
+        app: nginx-rs
+        env: production
+        tier: frontend
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "128Mi"
+              cpu: "100m"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+---
+# ============================================================================
+# 3. DEPLOYMENT DEFINITION
+# ============================================================================
+# A Deployment manages ReplicaSets and enables rolling updates and rollbacks
+# This is the most commonly used resource in production
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-deployment
+  namespace: default
+  labels:
+    app: nginx
+    tier: frontend
+  annotations:
+    description: "Production-grade nginx deployment with rolling updates"
+spec:
+  # Number of Pod replicas to maintain
+  replicas: 3
+
+  # Label selector to identify which Pods this Deployment manages
+  selector:
+    matchLabels:
+      app: nginx-deploy
+
+  # Rolling update strategy configuration
+  strategy:
+    type: RollingUpdate              # Gradual replacement of old Pods
+    rollingUpdate:
+      maxSurge: 1                     # Max 1 extra Pod during update
+      maxUnavailable: 1               # Max 1 Pod can be unavailable
+                                      # (ensures no downtime)
+
+  # Revision history limit for rollbacks
+  revisionHistoryLimit: 10
+
+  # Pod template specification
+  template:
+    metadata:
+      labels:
+        app: nginx-deploy
+        env: production
+        tier: frontend
+      annotations:
+        version: "1.27"
+    spec:
+      # Container specifications
+      containers:
+        - name: nginx
+          image: nginx:1.27-alpine
+          imagePullPolicy: IfNotPresent
+
+          # Ports exposed by the container
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+
+          # Environment variables
+          env:
+            - name: NGINX_HOST
+              value: "localhost"
+            - name: NGINX_PORT
+              value: "80"
+
+          # Resource requests and limits
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "200m"
+
+          # Liveness probe: Restart if unhealthy
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 1
+            failureThreshold: 3
+
+          # Readiness probe: Ready to receive traffic?
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 1
+            failureThreshold: 3
+
+          # Volume mounts (if using persistent storage)
+          # volumeMounts:
+          #   - name: config-volume
+          #     mountPath: /etc/nginx/conf.d
+
+          # Security context
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 101
+
+      # Pod-level security context
+      securityContext:
+        fsGroup: 101
+
+      # Restart policy
+      restartPolicy: Always
+
+      # DNS policy
+      dnsPolicy: ClusterFirst
+
+---
+# ============================================================================
+# 4. ALTERNATIVE: DEPLOYMENT WITH MULTIPLE REPLICAS AND ENV VARS
+# ============================================================================
+# This shows a more feature-rich deployment configuration
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app-deployment
+  namespace: default
+  labels:
+    app: web-app
+    version: v1.0
+spec:
+  replicas: 5
+
+  selector:
+    matchLabels:
+      app: web-app
+
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 2                     # Allow 2 extra Pods (faster rollout)
+      maxUnavailable: 1               # Keep at least replicas-1 running
+
+  template:
+    metadata:
+      labels:
+        app: web-app
+        version: v1.0
+    spec:
+      # Pod affinity rules (optional - for scheduling)
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - web-app
+                topologyKey: kubernetes.io/hostname
+
+      containers:
+        - name: web-app
+          image: myapp:1.0
+          imagePullPolicy: IfNotPresent
+
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: metrics
+              containerPort: 9090
+
+          env:
+            - name: APP_ENV
+              value: "production"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: DATABASE_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: app-config
+                  key: db_host
+            - name: DATABASE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: app-secrets
+                  key: db_password
+
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+---
+# ============================================================================
+# KEY DIFFERENCES SUMMARY
+# ============================================================================
+#
+# POD:
+#   - Smallest deployable unit
+#   - No self-healing (if Pod crashes, it's gone)
+#   - Use only for testing or one-off jobs
+#
+# REPLICASET:
+#   - Maintains desired number of Pod replicas
+#   - Self-healing (replaces failed Pods)
+#   - No rolling updates (requires manual update)
+#   - Rarely used directly in production
+#
+# DEPLOYMENT:
+#   - Manages ReplicaSets automatically
+#   - Self-healing + rolling updates + rollbacks
+#   - Supports version history
+#   - Use this in production!
+#
+# ============================================================================

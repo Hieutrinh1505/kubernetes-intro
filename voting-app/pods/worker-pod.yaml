@@ -1,0 +1,42 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: worker
+  labels:
+    app: worker
+  annotations:
+    description: "Background worker service that processes votes from Redis and stores them in PostgreSQL"
+
+spec:
+  # Restart policy to handle failures
+  restartPolicy: Always
+
+  containers:
+    - name: worker
+      image: dockersamples/examplevotingapp_worker:latest
+
+      # Environment variables for service discovery
+      env:
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: POSTGRES_HOST
+          value: "db"
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: POSTGRES_USER
+          value: "postgres"
+        - name: POSTGRES_PASSWORD
+          value: "postgres"
+        - name: POSTGRES_DB
+          value: "postgres"
+
+      # Resource requests and limits
+      resources:
+        requests:
+          memory: "64Mi"
+          cpu: "100m"
+        limits:
+          memory: "256Mi"
+          cpu: "500m"
